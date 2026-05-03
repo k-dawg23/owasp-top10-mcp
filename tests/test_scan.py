@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from owasp_top10_mcp.report_save import save_markdown_report
 from owasp_top10_mcp.scan.engine import run_scan
 from owasp_top10_mcp.scan.markdown import render_markdown
+from owasp_top10_mcp.server import owasp_report_save
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sample_repo"
 
@@ -14,7 +16,7 @@ def test_run_scan_basic():
     r = run_scan(str(FIXTURE), profile="human_full")
     assert r["schema_version"] == "1.0"
     assert r["scan"]["rulepack_version"] == "2025.1"
-    assert r["scan"]["product_version"] == "1.0.1"
+    assert r["scan"]["product_version"] == "1.0.2"
     ids = {f["owasp"]["id"] for f in r["findings"]}
     assert "A05" in ids or "A08" in ids or "A02" in ids
 
@@ -89,7 +91,7 @@ def test_normalize_doc_url_category_slash():
 def _minimal_scan() -> dict:
     return {
         "rulepack_version": "2025.1",
-        "product_version": "1.0.1",
+        "product_version": "1.0.2",
         "profile": "human_full",
         "run_id": "r1",
         "time_ms": 1,
@@ -155,3 +157,60 @@ def test_further_reading_other_category_gets_owasp_label():
     )
     assert "#### Further reading" in md
     assert "OWASP Top 10:2025 - A07" in md
+
+
+def test_write_report_bytes_match_render(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    expected = render_markdown(r).encode("utf-8")
+    out = tmp_path / "report.md"
+    save_markdown_report(r, str(out), overwrite=False)
+    assert out.read_bytes() == expected
+
+
+def test_save_rejects_relative_output_path(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    with pytest.raises(ValueError, match="absolute"):
+        save_markdown_report(r, "relative/path/report.md", overwrite=False)
+
+
+def test_save_refuses_overwrite_without_flag(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "report.md"
+    out.write_bytes(b"original")
+    with pytest.raises(FileExistsError):
+        save_markdown_report(r, str(out), overwrite=False)
+    assert out.read_bytes() == b"original"
+
+
+def test_save_overwrite_replaces(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "report.md"
+    out.write_bytes(b"old")
+    save_markdown_report(r, str(out), overwrite=True)
+    assert b"OWASP Top 10" in out.read_bytes()
+    assert out.read_bytes() == render_markdown(r).encode("utf-8")
+
+
+def test_save_markdown_report_result_keys(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "out.md"
+    result = save_markdown_report(r, str(out), overwrite=False)
+    assert result["path"] == str(out.resolve())
+    assert result["bytes_written"] == len(render_markdown(r).encode("utf-8"))
+    assert result["truncated"] == r["scan"]["truncated"]
+    assert result["rulepack_version"] == "2025.1"
+    assert result["product_version"] == "1.0.2"
+
+
+def test_owasp_report_save_mcp_tool(tmp_path):
+    out = tmp_path / "mcp.md"
+    result = owasp_report_save(
+        repo_root=str(FIXTURE),
+        output_path=str(out),
+        profile="human_full",
+    )
+    assert result["product_version"] == "1.0.2"
+    assert result["bytes_written"] > 0
+    assert result["path"] == str(out.resolve())
+    assert "truncated" in result
+    assert result["rulepack_version"] == "2025.1"

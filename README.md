@@ -1,6 +1,6 @@
 # owasp-top10-mcp
 
-Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.1**, **rulepack 2025.1**.
+Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.2**, **rulepack 2025.1**.
 
 - **Repository:** [github.com/k-dawg23/owasp-top10-mcp](https://github.com/k-dawg23/owasp-top10-mcp)  
 - **License:** [MIT](LICENSE)
@@ -63,9 +63,18 @@ Rulepack changes use **`RULEPACK_VERSION`** in `owasp_top10_mcp/__init__.py` and
 ### Option A — Cursor (or any MCP client)
 
 1. Register the server in **`~/.cursor/mcp.json`** (see below), then reload MCP or restart Cursor.
-2. In chat, ask your agent to call **`owasp_scan`** or **`owasp_report`** with an **absolute `repo_root`** path.
+2. In chat, ask your agent to call **`owasp_scan`**, **`owasp_report`**, or **`owasp_report_save`** with an **absolute `repo_root`** path (and for **`owasp_report_save`**, an **absolute `output_path`**).
 
 **`owasp_scan`** returns structured **JSON** (best for agents). **`owasp_report`** takes the **same arguments** and returns **Markdown** for reading or saving. Reports include **MITRE CWE** links (when rules emit `cwe` ids) and a **Further reading** list for supplementary `references` URLs (the primary OWASP category link stays on its own line; duplicate category URLs are not repeated there).
+
+**`owasp_report_save`** runs the **same scan** as **`owasp_report`** and writes that Markdown to disk. Parameters are the same as **`owasp_report`** plus:
+
+- **`output_path`** (required): absolute path to the `.md` file to write. Parent directories are created if missing. `~` is expanded.
+- **`overwrite`** (optional, default `false`): set `true` to replace an existing file.
+
+The tool returns a **small JSON object** (`path`, `bytes_written`, `truncated`, `rulepack_version`, `product_version`), not the full report body. Confirm the path with the user before writing.
+
+**Filename convention (clients):** the server does not pick names. Agents may choose patterns such as `owasp-report-<ISO8601>-<short-id>.md` when composing `output_path`.
 
 Do **not** expect `owasp-top10-mcp` alone to print a scan to the terminal: that command starts the **MCP server** and waits on stdio for the client.
 
@@ -107,7 +116,9 @@ print(render_markdown(run_scan(repo, profile='human_full')))
 | `categories` | no | e.g. `["A05","A04"]` for OWASP 2025 **A01–A10** only; omit for all. |
 | `max_files`, `max_bytes_per_file`, `max_total_bytes`, `time_budget_ms`, `severity_floor` | no | Override defaults from the OpenSpec design (caps / truncation). |
 
-Invalid `repo_root` or unknown category codes raise **ValueError** with a short message.
+**`owasp_report_save`** only: `output_path` (required, absolute), `overwrite` (optional, default `false`).
+
+Invalid `repo_root` or unknown category codes raise **ValueError** with a short message. Relative **`output_path`** raises **ValueError**; existing file with **`overwrite`** false raises **FileExistsError**.
 
 ## Cursor MCP configuration (`~/.cursor/mcp.json`)
 
@@ -137,6 +148,7 @@ After editing **`mcp.json`**, reload MCP servers or restart Cursor.
 
 ## Release notes
 
+- **v1.0.2** - MCP tool **`owasp_report_save`**: write the Markdown report to an **absolute** `output_path` (optional **`overwrite`**); returns JSON confirmation, not the full report body.
 - **v1.0.1** - Markdown reports add **CWE** links (`cwe.mitre.org`) and **Further reading** from `references`, omitting URLs that duplicate the finding's **Category link** after URL normalization.
 
 ## v1 limitations
