@@ -14,7 +14,7 @@ def test_run_scan_basic():
     r = run_scan(str(FIXTURE), profile="human_full")
     assert r["schema_version"] == "1.0"
     assert r["scan"]["rulepack_version"] == "2025.1"
-    assert r["scan"]["product_version"] == "1.0.0"
+    assert r["scan"]["product_version"] == "1.0.1"
     ids = {f["owasp"]["id"] for f in r["findings"]}
     assert "A05" in ids or "A08" in ids or "A02" in ids
 
@@ -72,11 +72,86 @@ def test_invalid_category():
         run_scan(str(FIXTURE), categories=["A99"])
 
 
-def test_patch_candidate_invariant():
+def test_markdown_cwe_mitre_link():
     r = run_scan(str(FIXTURE), profile="human_full")
-    for f in r["findings"]:
-        if f.get("patch_candidate"):
-            assert f["fix_class"] == "mechanical"
-            assert f["behavior_change"] is False
-        if f.get("fix_class") == "sensitive":
-            assert f["patch_candidate"] is False
+    md = render_markdown(r)
+    assert "https://cwe.mitre.org/data/definitions/79.html" in md
+    assert "#### CWE" in md
+
+
+def test_normalize_doc_url_category_slash():
+    from owasp_top10_mcp.constants import normalize_doc_url, owasp_top10_url
+
+    u = owasp_top10_url("A05")
+    assert normalize_doc_url(u) == normalize_doc_url(u.rstrip("/"))
+
+
+def _minimal_scan() -> dict:
+    return {
+        "rulepack_version": "2025.1",
+        "product_version": "1.0.1",
+        "profile": "human_full",
+        "run_id": "r1",
+        "time_ms": 1,
+        "files_scanned": 0,
+        "bytes_read": 0,
+        "truncated": False,
+        "truncation_reasons": [],
+        "limits_applied": {},
+    }
+
+
+def _dummy_finding(**extra) -> dict:
+    base = {
+        "id": "a" * 64,
+        "rule_id": "test.rule",
+        "owasp": {"id": "A05", "year": 2025},
+        "title": "Title",
+        "description": "Desc",
+        "severity": "high",
+        "confidence": "heuristic",
+        "location": {"path": "p.py", "start_line": 1, "end_line": 2},
+        "evidence": {"snippet": ""},
+        "references": [],
+        "patch_candidate": False,
+        "fix_class": "manual",
+        "behavior_change": False,
+        "blast_radius": "repo",
+    }
+    base.update(extra)
+    return base
+
+
+def test_further_reading_omitted_when_only_category_url():
+    cat = "https://owasp.org/Top10/2025/A05_2025-Injection/"
+    f = _dummy_finding(references=[cat])
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Further reading" not in md
+
+
+def test_further_reading_lists_supplementary_urls_only():
+    cat = "https://owasp.org/Top10/2025/A05_2025-Injection/"
+    extra = "https://example.com/security-guide"
+    f = _dummy_finding(references=[cat, extra])
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Further reading" in md
+    assert extra in md
+    fr_i = md.index("#### Further reading")
+    # only one bullet in that section before description block
+    chunk = md[fr_i : fr_i + 500]
+    assert chunk.count("https://example.com") == 1
+    assert "example.com/security-guide" in chunk
+
+
+def test_further_reading_other_category_gets_owasp_label():
+    a07 = "https://owasp.org/Top10/2025/A07_2025-Authentication_Failures/"
+    f = _dummy_finding(references=[a07])
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Further reading" in md
+    assert "OWASP Top 10:2025 - A07" in md

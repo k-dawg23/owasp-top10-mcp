@@ -1,13 +1,50 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
-from owasp_top10_mcp.constants import owasp_top10_url
+from owasp_top10_mcp.constants import (
+    OWASP_2025_SLUGS,
+    cwe_url,
+    normalize_doc_url,
+    owasp_top10_url,
+)
 from owasp_top10_mcp.scan.caps import SEVERITY_RANK
 
 
 SEVERITY_ORDER_LABELS = list(SEVERITY_RANK.keys())
 SEVERITY_ORDER_LABELS.sort(key=lambda k: SEVERITY_RANK[k])
+
+
+def _reference_link_label(url: str) -> str:
+    n = normalize_doc_url(url)
+    for ax in sorted(OWASP_2025_SLUGS.keys()):
+        if n == normalize_doc_url(owasp_top10_url(ax)):
+            return f"OWASP Top 10:2025 - {ax}"
+    parsed = urlparse(url.strip())
+    host = parsed.netloc or ""
+    path = (parsed.path or "").rstrip("/")
+    if host and path:
+        return f"{host}{path}"
+    if host:
+        return host
+    return "Documentation"
+
+
+def _supplementary_references(
+    references: list[str], category_url_norm: str
+) -> list[str]:
+    seen_set: set[str] = set()
+    out: list[str] = []
+    for raw in references:
+        n = normalize_doc_url(raw)
+        if not n or n == category_url_norm:
+            continue
+        if n in seen_set:
+            continue
+        seen_set.add(n)
+        out.append(raw)
+    return out
 
 
 def render_markdown(envelope: dict[str, Any]) -> str:
@@ -69,6 +106,25 @@ def render_markdown(envelope: dict[str, Any]) -> str:
             f"- **Location:** `{loc.get('path', '')}` lines {loc.get('start_line')}-{loc.get('end_line')}"
         )
         lines.append(f"- **Category link:** [OWASP {oid}]({url})")
+        cat_norm = normalize_doc_url(url)
+        cwes = f.get("cwe") or []
+        if cwes:
+            lines.append("")
+            lines.append("#### CWE")
+            lines.append("")
+            for cid in cwes:
+                cu = cwe_url(int(cid))
+                lines.append(f"- [CWE-{int(cid)}]({cu})")
+        refs = f.get("references") or []
+        if isinstance(refs, list):
+            extra = _supplementary_references([str(x) for x in refs], cat_norm)
+            if extra:
+                lines.append("")
+                lines.append("#### Further reading")
+                lines.append("")
+                for r in extra:
+                    label = _reference_link_label(r)
+                    lines.append(f"- [{label}]({r})")
         ev = f.get("evidence", {})
         snippet = ev.get("snippet", "")
         if snippet:

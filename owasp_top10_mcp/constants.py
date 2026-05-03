@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from owasp_top10_mcp import RULEPACK_VERSION, __version__
 
 PRODUCT_VERSION = __version__
@@ -23,6 +25,26 @@ def owasp_top10_url(owasp_id: str) -> str:
     if not slug:
         return "https://owasp.org/Top10/2025/"
     return f"https://owasp.org/Top10/2025/{slug}/"
+
+
+def cwe_url(cwe_id: int) -> str:
+    return f"https://cwe.mitre.org/data/definitions/{int(cwe_id)}.html"
+
+
+def normalize_doc_url(url: str) -> str:
+    """Normalize URL for dedupe (scheme and host lowercased; one trailing slash stripped from path)."""
+    raw = url.strip()
+    if not raw:
+        return ""
+    p = urlparse(raw)
+    scheme = p.scheme.lower()
+    netloc = p.netloc.lower()
+    path = p.path or ""
+    if len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    if path == "/":
+        path = ""
+    return f"{scheme}://{netloc}{path}"
 
 
 PATCH_CANDIDATE_ALLOWLIST: frozenset[str] = frozenset(
