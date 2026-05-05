@@ -10,6 +10,7 @@ from owasp_top10_mcp.constants import (
     owasp_top10_url,
 )
 from owasp_top10_mcp.scan.caps import SEVERITY_RANK
+from owasp_top10_mcp.scan.cheat_sheets import resolve_cheat_sheets
 
 
 SEVERITY_ORDER_LABELS = list(SEVERITY_RANK.keys())
@@ -125,6 +126,15 @@ def render_markdown(envelope: dict[str, Any]) -> str:
                 for r in extra:
                     label = _reference_link_label(r)
                     lines.append(f"- [{label}]({r})")
+        cheat_links = resolve_cheat_sheets(
+            str(f.get("rule_id", "")), str(f.get("owasp", {}).get("id", ""))
+        )
+        if cheat_links:
+            lines.append("")
+            lines.append("#### Cheat sheet")
+            lines.append("")
+            for cl in cheat_links:
+                lines.append(f"- [{cl['title']}]({cl['url']})")
         ev = f.get("evidence", {})
         snippet = ev.get("snippet", "")
         if snippet:

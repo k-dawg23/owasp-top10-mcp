@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from owasp_top10_mcp.report_save import save_markdown_report
+from owasp_top10_mcp.report_save import save_markdown_report, save_scan_json
 from owasp_top10_mcp.scan.engine import run_scan
 from owasp_top10_mcp.scan.markdown import render_markdown
-from owasp_top10_mcp.server import owasp_report_save
+from owasp_top10_mcp.server import owasp_report_save, owasp_scan, owasp_scan_save
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sample_repo"
 
@@ -16,7 +17,7 @@ def test_run_scan_basic():
     r = run_scan(str(FIXTURE), profile="human_full")
     assert r["schema_version"] == "1.0"
     assert r["scan"]["rulepack_version"] == "2025.1"
-    assert r["scan"]["product_version"] == "1.0.2"
+    assert r["scan"]["product_version"] == "1.0.4"
     ids = {f["owasp"]["id"] for f in r["findings"]}
     assert "A05" in ids or "A08" in ids or "A02" in ids
 
@@ -54,6 +55,8 @@ def test_markdown_contains_rulepack():
     md = render_markdown(r)
     assert "2025.1" in md
     assert "owasp.org/Top10/2025" in md
+    if r["findings"]:
+        assert "#### Cheat sheet" in md
 
 
 def test_finding_id_stable():
@@ -91,7 +94,7 @@ def test_normalize_doc_url_category_slash():
 def _minimal_scan() -> dict:
     return {
         "rulepack_version": "2025.1",
-        "product_version": "1.0.2",
+        "product_version": "1.0.4",
         "profile": "human_full",
         "run_id": "r1",
         "time_ms": 1,
@@ -199,7 +202,7 @@ def test_save_markdown_report_result_keys(tmp_path):
     assert result["bytes_written"] == len(render_markdown(r).encode("utf-8"))
     assert result["truncated"] == r["scan"]["truncated"]
     assert result["rulepack_version"] == "2025.1"
-    assert result["product_version"] == "1.0.2"
+    assert result["product_version"] == "1.0.4"
 
 
 def test_owasp_report_save_mcp_tool(tmp_path):
@@ -209,8 +212,119 @@ def test_owasp_report_save_mcp_tool(tmp_path):
         output_path=str(out),
         profile="human_full",
     )
-    assert result["product_version"] == "1.0.2"
+    assert result["product_version"] == "1.0.4"
     assert result["bytes_written"] > 0
     assert result["path"] == str(out.resolve())
     assert "truncated" in result
     assert result["rulepack_version"] == "2025.1"
+
+
+def test_write_scan_json_bytes_match_run_scan(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    expected = (json.dumps(r, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    out = tmp_path / "scan.json"
+    save_scan_json(r, str(out), overwrite=False)
+    assert out.read_bytes() == expected
+    assert json.loads(out.read_text(encoding="utf-8")) == r
+
+
+def test_save_scan_json_rejects_relative_output_path(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    with pytest.raises(ValueError, match="absolute"):
+        save_scan_json(r, "relative/path/scan.json", overwrite=False)
+
+
+def test_save_scan_json_refuses_overwrite_without_flag(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "scan.json"
+    out.write_bytes(b"original")
+    with pytest.raises(FileExistsError):
+        save_scan_json(r, str(out), overwrite=False)
+    assert out.read_bytes() == b"original"
+
+
+def test_save_scan_json_overwrite_replaces(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "scan.json"
+    out.write_bytes(b"old")
+    save_scan_json(r, str(out), overwrite=True)
+    parsed = json.loads(out.read_text(encoding="utf-8"))
+    assert parsed == r
+    assert parsed["scan"]["product_version"] == "1.0.4"
+
+
+def test_save_scan_json_result_keys(tmp_path):
+    r = run_scan(str(FIXTURE), profile="human_full")
+    out = tmp_path / "out.json"
+    result = save_scan_json(r, str(out), overwrite=False)
+    assert result["path"] == str(out.resolve())
+    expected_bytes = (
+        json.dumps(r, indent=2, ensure_ascii=False) + "\n"
+    ).encode("utf-8")
+    assert result["bytes_written"] == len(expected_bytes)
+    assert result["finding_count"] == len(r["findings"])
+    assert result["truncated"] == r["scan"]["truncated"]
+    assert result["rulepack_version"] == "2025.1"
+    assert result["product_version"] == "1.0.4"
+    for key in (
+        "path",
+        "bytes_written",
+        "finding_count",
+        "truncated",
+        "rulepack_version",
+        "product_version",
+    ):
+        assert key in result
+
+
+def test_owasp_scan_save_mcp_tool(tmp_path):
+    out = tmp_path / "mcp.json"
+    result = owasp_scan_save(
+        repo_root=str(FIXTURE),
+        output_path=str(out),
+        profile="human_full",
+    )
+    assert result["product_version"] == "1.0.4"
+    assert result["bytes_written"] > 0
+    assert result["path"] == str(out.resolve())
+    assert "truncated" in result
+    assert result["rulepack_version"] == "2025.1"
+    assert result["finding_count"] == len(json.loads(out.read_text())["findings"])
+
+
+def test_owasp_scan_mcp_returns_product_version():
+    r = owasp_scan(repo_root=str(FIXTURE), profile="human_full")
+    assert r["scan"]["product_version"] == "1.0.4"
+
+
+def test_markdown_includes_cheat_sheet_for_mapped_rule():
+    f = _dummy_finding(rule_id="owasp2025.a05.js.eval")
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Cheat sheet" in md
+    assert "cheatsheetseries.owasp.org" in md
+    assert "Injection_Prevention_Cheat_Sheet.html" in md
+
+
+def test_markdown_omits_cheat_sheet_when_unmapped_and_no_fallback():
+    f = _dummy_finding(
+        rule_id="custom.unmapped.rule",
+        owasp={"id": "A99", "year": 2025},
+    )
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Cheat sheet" not in md
+
+
+def test_markdown_cheat_sheet_category_fallback():
+    f = _dummy_finding(
+        rule_id="not.bundled.in.rule.map",
+        owasp={"id": "A05", "year": 2025},
+    )
+    md = render_markdown(
+        {"schema_version": "1.0", "scan": _minimal_scan(), "findings": [f]}
+    )
+    assert "#### Cheat sheet" in md
+    assert "Injection_Prevention_Cheat_Sheet.html" in md

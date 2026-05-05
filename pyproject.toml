@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "owasp-top10-mcp"
-version = "1.0.2"
+version = "1.0.4"
 description = "Local MCP server: static OWASP Top 10:2025-oriented repo scanning (v1)."
 readme = "README.md"
 requires-python = ">=3.11"

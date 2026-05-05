@@ -1,11 +1,28 @@
 # owasp-top10-mcp Specification
 
 ## Purpose
-TBD - created by archiving change owasp-top10-mcp. Update Purpose after archive.
+
+**owasp-top10-mcp** is a **local** Model Context Protocol (MCP) server using **stdio**. It targets **solo developers and AI agents** who want a **fast, offline-capable, static** read of a repository against **OWASP Top 10:2025** themes (**A01–A10**). It does **not** require a hosted service or **PyPI** for end-user operation: a **git clone**, **venv**, and MCP config suffice. Findings are **advisory**; default scans do not run external security binaries or advisory APIs.
+
 ## Requirements
+
+### Requirement: Specification purpose in canonical spec
+
+The **Purpose** section of this file SHALL describe the intended audience (**solo developers and AI agents**), **stdio** MCP transport, **static** OWASP Top 10:2025 scope (**A01–A10**), **local** operation without **requiring PyPI** for end users, and **advisory** findings (no mandatory hosted service for core operation).
+
+#### Scenario: Purpose is substantive
+
+- **WHEN** a reader opens this specification file after this change is applied
+- **THEN** the **Purpose** section is concrete prose and does not consist solely of a **`TBD`** placeholder
+
 ### Requirement: Local MCP server exposes OWASP-oriented scan
 
-The system SHALL provide a **local MCP server** that communicates over **stdio** (standard MCP transport) and exposes **`owasp_scan`** (canonical JSON results) and **`owasp_report`** (Markdown narrative for the same parameters), each running a **static repository scan** aligned with **OWASP Top 10:2025** categories **A01** through **A10**.
+The system SHALL provide a **local MCP server** that communicates over **stdio** (standard MCP transport) and exposes these tools, each driven by the same **static repository scan** aligned with **OWASP Top 10:2025** categories **A01** through **A10**:
+
+- **`owasp_scan`:** canonical **JSON** findings envelope (no Markdown body).
+- **`owasp_report`:** **Markdown** report for the **same parameters** as **`owasp_scan`** (human-readable, including navigable links where implemented).
+- **`owasp_report_save`:** runs the same scan and writes that **Markdown** to a **client-supplied absolute path**, returning a **small JSON** confirmation (not the full report body).
+- **`owasp_scan_save`:** runs the same scan and writes the **`owasp_scan`** JSON **envelope** to a **client-supplied absolute path**, returning a **small JSON** confirmation (not the full findings payload in the tool result).
 
 #### Scenario: Agent invokes scan tool
 
@@ -15,7 +32,17 @@ The system SHALL provide a **local MCP server** that communicates over **stdio**
 #### Scenario: User invokes Markdown report tool
 
 - **WHEN** a client invokes **`owasp_report`** with the same arguments as a prior **`owasp_scan`**
-- **THEN** the Markdown content enumerates the same findings as that scan’s JSON (same `id` set, subject to documented sort order)
+- **THEN** the Markdown content enumerates the same findings as that scan's JSON (same `id` set, subject to documented sort order)
+
+#### Scenario: Client may persist Markdown via save tool
+
+- **WHEN** a client needs the Markdown report written to disk at a known absolute path
+- **THEN** the client may invoke **`owasp_report_save`** with that path in addition to the scan parameters shared with **`owasp_report`**
+
+#### Scenario: Client may persist JSON envelope via save tool
+
+- **WHEN** a client needs the **`owasp_scan`** JSON envelope written to disk at a known absolute path
+- **THEN** the client may invoke **`owasp_scan_save`** with that path in addition to the scan parameters shared with **`owasp_scan`**
 
 ### Requirement: v1 static-only execution
 
@@ -60,7 +87,7 @@ The system SHALL expose **`owasp_scan`** as the **primary JSON scan tool**, acce
 
 ### Requirement: Markdown report tool
 
-The system SHALL expose **`owasp_report`** as a distinct MCP tool accepting the **same parameters** as **`owasp_scan`**. It SHALL produce **Markdown** containing at least: **rulepack version**, **profile**, **truncation summary**, **counts by severity and OWASP category**, and **enumerated findings** with locations and links. PDF generation is **not** required in v1.
+The system SHALL expose **`owasp_report`** as a distinct MCP tool accepting the **same parameters** as **`owasp_scan`**. It SHALL produce **Markdown** containing at least: **rulepack version**, **profile**, **truncation summary**, **counts by severity and OWASP category**, and **enumerated findings** with locations and links. **Navigable** Markdown (e.g. OWASP category links, CWE links, and supplementary reference links as implemented) is available only via this tool's return value (or via the file written by **`owasp_report_save`**), not via **`owasp_scan`**. PDF generation is **not** required in v1.
 
 #### Scenario: Markdown via owasp_report only
 
@@ -71,6 +98,11 @@ The system SHALL expose **`owasp_report`** as a distinct MCP tool accepting the 
 
 - **WHEN** the client invokes **`owasp_scan`**
 - **THEN** the structured tool result contains **only** the JSON findings envelope and **does not** embed a full Markdown report
+
+#### Scenario: Linked report in chat uses Markdown tool
+
+- **WHEN** the client needs the full Markdown report body with navigable documentation links in the MCP chat UI
+- **THEN** the client uses **`owasp_report`** (or **`owasp_report_save`** plus opening the file), not **`owasp_scan`** alone
 
 ### Requirement: Scan profiles and performance caps
 
@@ -122,21 +154,40 @@ The system SHALL default **`patch_candidate` to false** for all findings. Only f
 
 ### Requirement: No silent remediation
 
-The MCP server MUST NOT apply code changes, write patches to disk, or perform automated fixes. Remediation MUST be expressed only as **textual guidance** and **structured fields** consumed by the user or external agent.
+The MCP server MUST NOT apply code changes to the **scanned repository**, write patches into that repository tree, or perform automated fixes there. Remediation MUST be expressed only as **textual guidance** and **structured fields** consumed by the user or external agent.
 
-#### Scenario: Tool output is advisory only
+The server MAY expose **`owasp_report_save`** and **`owasp_scan_save`**, which write **only** the **report** (Markdown) or **JSON scan envelope**, respectively, to a filesystem path **explicitly provided by the client**. Those operations are **output persistence**, not remediation of project source.
 
-- **WHEN** the scan completes with one or more findings
-- **THEN** the repository working tree is unchanged by the scan tool invocation alone
+#### Scenario: Scan-only tools do not modify the repo tree
+
+- **WHEN** the client invokes only **`owasp_scan`** or **`owasp_report`**
+- **THEN** the scanned repository working tree is unchanged by that invocation
+
+#### Scenario: Explicit report save is not repo remediation
+
+- **WHEN** the client invokes **`owasp_report_save`** with an absolute **`output_path`**
+- **THEN** only the report file at **`output_path`** is created or replaced per that tool's contract; the scanned repository tree is not modified by the scanning logic
+
+#### Scenario: Explicit JSON save is not repo remediation
+
+- **WHEN** the client invokes **`owasp_scan_save`** with an absolute **`output_path`**
+- **THEN** only the JSON file at **`output_path`** is created or replaced per that tool's contract; the scanned repository tree is not modified by the scanning logic
 
 ### Requirement: Client-agnostic MCP surface
 
 The tool schema and descriptions SHALL NOT depend on a specific vendor client beyond standard MCP. The same server SHALL be usable from **Cursor**, **Codex**, and other MCP-capable hosts.
 
+Each tool's description (e.g. docstring exposed as the tool's description) SHALL briefly state **when to use that tool** versus **`owasp_scan`**, **`owasp_report`**, **`owasp_report_save`**, and **`owasp_scan_save`** (primary use case and return type), using portable language only.
+
 #### Scenario: Descriptor has no Cursor-only fields
 
 - **WHEN** a maintainer inspects published tool definitions
 - **THEN** tool descriptions use portable language and standard MCP schema shapes without client-proprietary extensions
+
+#### Scenario: Tool choice is documented in descriptors
+
+- **WHEN** a maintainer or agent reads the scan and report tool descriptions
+- **THEN** each description distinguishes JSON scan vs Markdown string vs Markdown save confirmation vs JSON save confirmation in portable terms
 
 ### Requirement: Honest scope for supply chain without CVEs
 
@@ -147,3 +198,105 @@ When emitting findings mapped to **A03:2025**, the system MUST NOT claim **CVE i
 - **WHEN** the scan reports a git or tarball dependency source in a manifest
 - **THEN** the finding does not include a CVE identifier unless a future version explicitly enables advisory correlation
 
+### Requirement: Product version 1.0.4
+
+The shipped package and scan metadata SHALL report **product version `1.0.4`** wherever **product version** is exposed (`pyproject.toml`, package `__version__`, and `scan.product_version` in JSON output).
+
+#### Scenario: Scan metadata shows 1.0.4
+
+- **WHEN** a scan completes successfully via any tool that includes scan metadata
+- **THEN** the JSON envelope includes `scan.product_version` with value **`1.0.4`**
+
+### Requirement: MCP tool writes Markdown report to an explicit path
+
+The system SHALL expose **`owasp_report_save`**, an MCP tool that accepts the **same scan parameters** as **`owasp_report`** plus **`output_path`** (string) and optional **`overwrite`** (boolean, default **false**). The tool SHALL run the **same static scan** as **`owasp_scan`**, render Markdown with **`render_markdown`**, encode the body as **UTF-8**, and write it to **`output_path`**. The Markdown bytes SHALL be **identical** to those implied by invoking **`owasp_report`** with the same scan arguments under the same implementation (same normalization rules).
+
+#### Scenario: Save succeeds with absolute path
+
+- **WHEN** the client invokes **`owasp_report_save`** with a valid repository root, valid scan arguments, and **`output_path`** set to an absolute path in a writable directory where the file does not exist, and **`overwrite`** is false
+- **THEN** the file is created and contains the UTF-8 Markdown report, and the tool returns a structured result including **`path`**, **`bytes_written`**, and **`truncated`** consistent with the scan envelope
+
+#### Scenario: Relative path is rejected
+
+- **WHEN** the client passes a relative **`output_path`** (e.g. `reports/out.md`)
+- **THEN** the tool fails with an actionable error and does not create or truncate a file
+
+#### Scenario: Existing file without overwrite is rejected
+
+- **WHEN** the target file already exists and **`overwrite`** is false
+- **THEN** the tool fails without modifying the existing file
+
+#### Scenario: Overwrite replaces file atomically
+
+- **WHEN** the target file already exists and **`overwrite`** is true
+- **THEN** the file is replaced by the new report content without leaving a persistent partial file under normal failure modes (per **`design.md` D3**)
+
+### Requirement: Save tool returns structured metadata
+
+The **`owasp_report_save`** tool SHALL NOT return the full Markdown body as its primary payload. It SHALL return a **JSON-serializable** object that includes at minimum **`path`** (string, absolute path after normalization), **`bytes_written`** (non-negative integer), and **`truncated`** (boolean). It SHALL include **`rulepack_version`** and **`product_version`** in a form consistent with the **`owasp_scan`** envelope (either nested under a **`scan`** object or as top-level keys mirrored from that object).
+
+#### Scenario: Agent receives confirmation payload
+
+- **WHEN** **`owasp_report_save`** completes successfully
+- **THEN** the tool result allows a client to display **`path`**, **`bytes_written`**, **`truncated`**, **`rulepack_version`**, and **`product_version`** without parsing the Markdown file.
+
+### Requirement: MCP tool writes JSON scan envelope to an explicit path
+
+The system SHALL expose **`owasp_scan_save`**, an MCP tool that accepts the **same scan parameters** as **`owasp_scan`** plus **`output_path`** (string) and optional **`overwrite`** (boolean, default **false**). The tool SHALL invoke the **same scan engine** as **`owasp_scan`** once, serialize the returned findings **envelope** (the same object shape as **`owasp_scan`**) to **UTF-8** using **`json.dumps`** with **`indent=2`**, **`ensure_ascii=False`**, and a **single trailing newline** after the JSON document, and write that text to **`output_path`**. The UTF-8 bytes SHALL decode to JSON equivalent to the **`owasp_scan`** result for the same arguments under the same implementation (same serialization policy).
+
+#### Scenario: JSON save succeeds with absolute path
+
+- **WHEN** the client invokes **`owasp_scan_save`** with valid scan arguments and **`output_path`** set to an absolute path in a writable directory where the file does not exist, and **`overwrite`** is false
+- **THEN** the file is created and its contents parse as JSON equivalent to the **`owasp_scan`** envelope, and the tool returns a structured result including **`path`**, **`bytes_written`**, **`finding_count`**, **`truncated`**, **`rulepack_version`**, and **`product_version`**
+
+#### Scenario: Relative JSON output path is rejected
+
+- **WHEN** the client passes a relative **`output_path`** for **`owasp_scan_save`**
+- **THEN** the tool fails with an actionable error and does not create or truncate a file
+
+#### Scenario: Existing JSON file without overwrite is rejected
+
+- **WHEN** the target file already exists and **`overwrite`** is false
+- **THEN** the **`owasp_scan_save`** tool fails without modifying the existing file
+
+#### Scenario: JSON overwrite replaces file atomically
+
+- **WHEN** the target file already exists and **`overwrite`** is true
+- **THEN** the file is replaced by the new JSON content using an atomic write strategy equivalent to **`owasp_report_save`** (temp file in the same directory, then replace)
+
+### Requirement: JSON save tool returns structured metadata
+
+The **`owasp_scan_save`** tool SHALL NOT return the full findings envelope as its primary payload. It SHALL return a **JSON-serializable** object with at least **`path`** (normalized absolute string), **`bytes_written`** (non-negative integer), **`finding_count`** (non-negative integer), **`truncated`** (boolean), **`rulepack_version`**, and **`product_version`**.
+
+#### Scenario: Agent receives JSON save confirmation payload
+
+- **WHEN** **`owasp_scan_save`** completes successfully
+- **THEN** the tool result allows a client to display **`path`**, **`bytes_written`**, **`finding_count`**, **`truncated`**, **`rulepack_version`**, and **`product_version`** without parsing the saved file
+
+### Requirement: Bundled OWASP cheat sheet map
+
+The system SHALL ship a **static**, read-only **cheat sheet map** bundled with the package (under `owasp_top10_mcp/`). The map SHALL resolve **zero or more** cheat sheet entries (`title`, `url`) for a given finding using **`rule_id`** first, then an optional **fallback** by **`owasp.id`** (A01-A10) when no rule-specific entry exists. Resolution MUST NOT use network I/O at scan time. URLs SHOULD target **OWASP Cheat Sheet Series** or other maintainer-approved OWASP documentation pages.
+
+#### Scenario: Offline resolution
+
+- **WHEN** a scan runs with no network access
+- **THEN** any cheat sheet links emitted in Markdown reports come only from the bundled map
+
+### Requirement: Markdown cheat sheet subsection
+
+For each finding, when resolution per **Bundled OWASP cheat sheet map** yields at least one distinct URL, the Markdown report SHALL include a **`#### Cheat sheet`** subsection for that finding with a Markdown bullet list of **`[title](url)`** links. URLs duplicated between rule-specific and fallback entries SHALL appear **once** (rule-level entries first, preserve first-seen order otherwise). When resolution yields no URLs, the subsection MUST be omitted entirely.
+
+#### Scenario: Mapped rule renders cheat sheet link
+
+- **WHEN** a finding's `rule_id` has at least one entry in the bundled map
+- **THEN** the Markdown for that finding includes **`#### Cheat sheet`** and a link whose URL matches the map
+
+#### Scenario: Unmapped rule omits subsection
+
+- **WHEN** a finding's `rule_id` and `owasp.id` resolve to no cheat sheet entries
+- **THEN** the Markdown for that finding does not include **`#### Cheat sheet`**
+
+#### Scenario: Category fallback applies when rule unmapped
+
+- **WHEN** a finding's `rule_id` has no entry but **`owasp.id`** has a configured fallback URL
+- **THEN** the Markdown includes **`#### Cheat sheet`** with that fallback link

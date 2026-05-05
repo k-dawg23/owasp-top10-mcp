@@ -1,7 +1,8 @@
-"""Write Markdown scan reports to disk (atomic UTF-8)."""
+"""Write Markdown and JSON scan reports to disk (atomic UTF-8)."""
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -49,6 +50,39 @@ def write_utf8_file_atomic(
             pass
         raise
     return dest_str, len(payload)
+
+
+def save_scan_json(
+    envelope: dict[str, Any], output_path: str, *, overwrite: bool = False
+) -> dict[str, Any]:
+    """Serialize ``envelope`` to UTF-8 JSON (pretty-print), write atomically, confirm."""
+    expanded = Path(output_path).expanduser()
+    if not expanded.is_absolute():
+        raise ValueError(
+            "output_path must be an absolute path (after ~ expansion); "
+            f"got {output_path!r}"
+        )
+    dest = expanded.resolve()
+    if dest.exists() and not overwrite:
+        raise FileExistsError(
+            f"output_path exists and overwrite is false: {dest}"
+        )
+    body = json.dumps(envelope, indent=2, ensure_ascii=False) + "\n"
+    path_str, nbytes = write_utf8_file_atomic(
+        output_path, body, overwrite=overwrite
+    )
+    scan = envelope.get("scan", {})
+    findings = envelope.get("findings", [])
+    if not isinstance(findings, list):
+        findings = []
+    return {
+        "path": path_str,
+        "bytes_written": nbytes,
+        "finding_count": len(findings),
+        "truncated": bool(scan.get("truncated")),
+        "rulepack_version": scan.get("rulepack_version", ""),
+        "product_version": scan.get("product_version", ""),
+    }
 
 
 def save_markdown_report(
