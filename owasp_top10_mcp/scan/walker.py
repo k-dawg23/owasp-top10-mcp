@@ -27,7 +27,20 @@ BLOCKED_DIRS = frozenset(
 )
 
 TIER1_EXT = frozenset(
-    {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".html", ".htm"}
+    {
+        ".py",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".mjs",
+        ".cjs",
+        ".vue",
+        ".svelte",
+        ".astro",
+        ".html",
+        ".htm",
+    }
 )
 BEST_EXT = frozenset(
     {

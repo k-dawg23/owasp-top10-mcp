@@ -1,6 +1,6 @@
 # owasp-top10-mcp
 
-Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.4**, **rulepack 2025.1**.
+Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.5**, **rulepack 2025.1**.
 
 - **Repository:** [github.com/k-dawg23/owasp-top10-mcp](https://github.com/k-dawg23/owasp-top10-mcp)  
 - **License:** [MIT](LICENSE)
@@ -50,7 +50,7 @@ Run **`pip install -U owasp-top10-mcp`** (or `uv add 'owasp-top10-mcp==x.y.z'`) 
 
 ### Maintainers: bumping the product version
 
-1. Set **`__version__`** in `owasp_top10_mcp/__init__.py` to the new release (e.g. `1.0.4`).
+1. Set **`__version__`** in `owasp_top10_mcp/__init__.py` to the new release (e.g. `1.0.5`).
 2. Set **`version`** in `pyproject.toml` under `[project]` to the **same** string.
 3. Update the **lead sentence** of this README if it states the version explicitly.
 4. Add a bullet under **Release notes** (below).
@@ -165,6 +165,7 @@ After editing **`mcp.json`**, reload MCP servers or restart Cursor.
 
 ## Release notes
 
+- **v1.0.5** - **Astro** **`.astro`** files use **tier-1** scan depth (same JavaScript tier-1 rule pass as **`.vue`** / **`.svelte`** / HTML); README adds **Scan surface and depth**; OpenSpec change **`astro-tier1-scan`** (for archive workflow).
 - **v1.0.4** - Markdown reports add **curated OWASP Cheat Sheet Series** links (`#### Cheat sheet` per finding); bundled static map keyed by **`rule_id`** with A01–A10 fallback; no network I/O for link resolution.
 - **v1.0.3** - MCP tool **`owasp_scan_save`**: write the **JSON scan envelope** to an **absolute** `output_path` (optional **`overwrite`**); returns confirmation including **`finding_count`**, not the full payload.
 - **v1.0.2** - MCP tool **`owasp_report_save`**: write the Markdown report to an **absolute** `output_path` (optional **`overwrite`**); returns JSON confirmation, not the full report body.
@@ -175,6 +176,16 @@ After editing **`mcp.json`**, reload MCP servers or restart Cursor.
 - **Static only** — no DAST, no bundled subprocess scanners (`npm audit`, Semgrep, …), **no** network OSV/CVE correlation.
 - **Advisory** — the server does not modify the repo; remediation is via your own review or agent-proposed patches.
 - **PDF** — not generated; use Markdown and convert externally if you need PDF.
+
+## Scan surface and depth (v1)
+
+The walker skips common vendor and build directories (e.g. **`node_modules`**, **`.git`**) and honors **`.gitignore`**. Eligible paths use a **tier** flag:
+
+- **Tier-1** (deeper, line-based rules for Python and typical web stacks): **`.py`**; **`.js`**, **`.jsx`**, **`.ts`**, **`.tsx`**, **`.mjs`**, **`.cjs`**; **`.vue`**, **`.svelte`**, **`.astro`**; **`.html`**, **`.htm`**. These files run the same **JavaScript/TypeScript tier-1** analyzer as other SFC-style extensions (Astro components are treated like Vue/Svelte for that pass—no Astro compiler; full-file text including frontmatter).
+- **Context / manifests:** e.g. **Dockerfile**, **docker-compose**, **`package.json`**, lockfiles, **`requirements.txt`**, selected **YAML** (incl. GitHub workflows, K8s dirs), **Terraform**—targeted or generic checks.
+- **Best-effort:** other configured extensions (e.g. **`.go`**, **`.java`**, many **`.json`** outside allowlisted names) get lighter generic rules only.
+
+For the exact allowlists and blocked dirs, see **`owasp_top10_mcp/scan/walker.py`**. Caps (`max_files`, `time_budget_ms`, …) still apply; large repos may truncate per scan metadata.
 
 ## Roadmap (v2 ideas)
 

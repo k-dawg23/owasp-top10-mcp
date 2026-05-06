@@ -482,6 +482,7 @@ def run_rules_on_file(root: Path, rel_posix: str, tier: str, text: str) -> list[
         ".cjs",
         ".vue",
         ".svelte",
+        ".astro",
         ".html",
         ".htm",
     ):

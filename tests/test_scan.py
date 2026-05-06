@@ -11,13 +11,28 @@ from owasp_top10_mcp.scan.markdown import render_markdown
 from owasp_top10_mcp.server import owasp_report_save, owasp_scan, owasp_scan_save
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sample_repo"
+ASTRO_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "astro_repo"
+
+
+def test_astro_tier1_target_blank_finding():
+    r = run_scan(str(ASTRO_FIXTURE), profile="human_full")
+    astro_hits = [
+        f
+        for f in r["findings"]
+        if str(f.get("location", {}).get("path", "")).endswith(".astro")
+    ]
+    assert astro_hits, "expected at least one finding in .astro file"
+    assert any(
+        f.get("rule_id") == "owasp2025.a05.html.target-blank-no-opener"
+        for f in astro_hits
+    )
 
 
 def test_run_scan_basic():
     r = run_scan(str(FIXTURE), profile="human_full")
     assert r["schema_version"] == "1.0"
     assert r["scan"]["rulepack_version"] == "2025.1"
-    assert r["scan"]["product_version"] == "1.0.4"
+    assert r["scan"]["product_version"] == "1.0.5"
     ids = {f["owasp"]["id"] for f in r["findings"]}
     assert "A05" in ids or "A08" in ids or "A02" in ids
 
@@ -94,7 +109,7 @@ def test_normalize_doc_url_category_slash():
 def _minimal_scan() -> dict:
     return {
         "rulepack_version": "2025.1",
-        "product_version": "1.0.4",
+        "product_version": "1.0.5",
         "profile": "human_full",
         "run_id": "r1",
         "time_ms": 1,
@@ -202,7 +217,7 @@ def test_save_markdown_report_result_keys(tmp_path):
     assert result["bytes_written"] == len(render_markdown(r).encode("utf-8"))
     assert result["truncated"] == r["scan"]["truncated"]
     assert result["rulepack_version"] == "2025.1"
-    assert result["product_version"] == "1.0.4"
+    assert result["product_version"] == "1.0.5"
 
 
 def test_owasp_report_save_mcp_tool(tmp_path):
@@ -212,7 +227,7 @@ def test_owasp_report_save_mcp_tool(tmp_path):
         output_path=str(out),
         profile="human_full",
     )
-    assert result["product_version"] == "1.0.4"
+    assert result["product_version"] == "1.0.5"
     assert result["bytes_written"] > 0
     assert result["path"] == str(out.resolve())
     assert "truncated" in result
@@ -250,7 +265,7 @@ def test_save_scan_json_overwrite_replaces(tmp_path):
     save_scan_json(r, str(out), overwrite=True)
     parsed = json.loads(out.read_text(encoding="utf-8"))
     assert parsed == r
-    assert parsed["scan"]["product_version"] == "1.0.4"
+    assert parsed["scan"]["product_version"] == "1.0.5"
 
 
 def test_save_scan_json_result_keys(tmp_path):
@@ -265,7 +280,7 @@ def test_save_scan_json_result_keys(tmp_path):
     assert result["finding_count"] == len(r["findings"])
     assert result["truncated"] == r["scan"]["truncated"]
     assert result["rulepack_version"] == "2025.1"
-    assert result["product_version"] == "1.0.4"
+    assert result["product_version"] == "1.0.5"
     for key in (
         "path",
         "bytes_written",
@@ -284,7 +299,7 @@ def test_owasp_scan_save_mcp_tool(tmp_path):
         output_path=str(out),
         profile="human_full",
     )
-    assert result["product_version"] == "1.0.4"
+    assert result["product_version"] == "1.0.5"
     assert result["bytes_written"] > 0
     assert result["path"] == str(out.resolve())
     assert "truncated" in result
@@ -294,7 +309,7 @@ def test_owasp_scan_save_mcp_tool(tmp_path):
 
 def test_owasp_scan_mcp_returns_product_version():
     r = owasp_scan(repo_root=str(FIXTURE), profile="human_full")
-    assert r["scan"]["product_version"] == "1.0.4"
+    assert r["scan"]["product_version"] == "1.0.5"
 
 
 def test_markdown_includes_cheat_sheet_for_mapped_rule():
