@@ -5,7 +5,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from owasp_top10_mcp.constants import PATCH_CANDIDATE_ALLOWLIST, owasp_top10_url
+from owasp_top10_mcp.constants import (
+    PATCH_CANDIDATE_ALLOWLIST,
+    merge_owasp_api_references,
+    owasp_top10_url,
+)
 
 
 def normalize_snippet(snippet: str) -> str:
@@ -54,6 +58,7 @@ class RawFinding:
     patch_candidate: bool = False
     limitations: list[str] = field(default_factory=list)
     cwe: list[int] | None = None
+    owasp_api_id: str | None = None
 
     def to_final_dict(self, rulepack_version: str) -> dict[str, Any]:
         patch = bool(self.patch_candidate and self.rule_id in PATCH_CANDIDATE_ALLOWLIST)
@@ -75,6 +80,8 @@ class RawFinding:
         refs = list(self.references)
         if not refs:
             refs = [owasp_top10_url(self.owasp_id)]
+        if self.owasp_api_id:
+            refs = merge_owasp_api_references(refs, self.owasp_api_id)
         out: dict[str, Any] = {
             "id": fid,
             "rule_id": self.rule_id,
@@ -99,6 +106,8 @@ class RawFinding:
             out["cwe"] = self.cwe
         if self.limitations:
             out["limitations"] = self.limitations
+        if self.owasp_api_id:
+            out["owasp_api"] = {"year": 2023, "id": self.owasp_api_id}
         return out
 
 

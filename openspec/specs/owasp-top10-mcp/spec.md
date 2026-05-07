@@ -2,13 +2,13 @@
 
 ## Purpose
 
-**owasp-top10-mcp** is a **local** Model Context Protocol (MCP) server using **stdio**. It targets **solo developers and AI agents** who want a **fast, offline-capable, static** read of a repository against **OWASP Top 10:2025** themes (**A01–A10**). It does **not** require a hosted service or **PyPI** for end-user operation: a **git clone**, **venv**, and MCP config suffice. Findings are **advisory**; default scans do not run external security binaries or advisory APIs.
+**owasp-top10-mcp** is a **local** Model Context Protocol (MCP) server using **stdio**. It targets **solo developers and AI agents** who want a **fast, offline-capable, static** read of a repository against **OWASP Top 10:2025** themes (**A01–A10**), with **supplementary** linkage to **OWASP API Security Top 10:2023** (**API1–API10**) via optional **`owasp_api`** metadata and bundled documentation URLs where rules define a mapping. It does **not** require a hosted service or **PyPI** for end-user operation: a **git clone**, **venv**, and MCP config suffice. Findings are **advisory**; default scans do not run external security binaries or advisory APIs.
 
 ## Requirements
 
 ### Requirement: Specification purpose in canonical spec
 
-The **Purpose** section of this file SHALL describe the intended audience (**solo developers and AI agents**), **stdio** MCP transport, **static** OWASP Top 10:2025 scope (**A01–A10**), **local** operation without **requiring PyPI** for end users, and **advisory** findings (no mandatory hosted service for core operation).
+The **Purpose** section of this file SHALL describe the intended audience (**solo developers and AI agents**), **stdio** MCP transport, **static** OWASP Top 10:2025 scope (**A01–A10**) as the **primary** taxonomy, **supplementary** OWASP API Security Top 10:2023 cross-mapping (**API1–API10**) where optional metadata applies, **local** operation without **requiring PyPI** for end users, and **advisory** findings (no mandatory hosted service for core operation).
 
 #### Scenario: Purpose is substantive
 
@@ -129,9 +129,11 @@ The system SHALL return findings as JSON with **`schema_version` `1.0`**, a **`s
 
 ### Requirement: Finding object contract
 
-Each finding object SHALL include at minimum: **`id`**, **`rule_id`**, **`owasp`** (`year` **2025**, `id` **A01–A10**), **`title`**, **`description`**, **`severity`**, **`confidence`** (one of `rule` | `heuristic` | `review_required` or an equivalent documented enum), **`location`** (path and line range), **`evidence`** (short snippet), **`references`** (OWASP category link encouraged), **`patch_candidate`** (boolean), **`fix_class`**, **`behavior_change`** (boolean), and **`blast_radius`**. Optional **`cwe`** and **`limitations`** MAY be included.
+Each finding object SHALL include at minimum: **`id`**, **`rule_id`**, **`owasp`** (`year` **2025**, `id` **A01–A10**), **`title`**, **`description`**, **`severity`**, **`confidence`** (one of `rule` | `heuristic` | `review_required` or an equivalent documented enum), **`location`** (path and line range), **`evidence`** (short snippet), **`references`** (OWASP Top 10 category link encouraged; additional OWASP API Security documentation URLs allowed when static maps provide them), **`patch_candidate`** (boolean), **`fix_class`**, **`behavior_change`** (boolean), and **`blast_radius`**. Optional **`cwe`**, **`limitations`**, and **`owasp_api`** MAY be included.
 
-The **`id`** SHALL be a **deterministic SHA-256** digest (**64-character lowercase hexadecimal**) computed from the **canonical key** defined in **`design.md` D2b**. The system MUST NOT use **UUIDs** for finding **`id`** in v1.
+When present, **`owasp_api`** SHALL be an object with **`year` `2023`** and **`id`** one of **`API1`** through **`API10`**. It MUST be omitted when the rulepack does not define a documented mapping for that finding.
+
+The **`id`** SHALL be a **deterministic SHA-256** digest (**64-character lowercase hexadecimal**) computed from the **canonical key** defined in **`design.md` D2b**, which MUST NOT include **`owasp_api`** or supplemental reference URLs. The system MUST NOT use **UUIDs** for finding **`id`** in v1.
 
 #### Scenario: Validator enforces patch_candidate invariants
 
@@ -147,6 +149,11 @@ The **`id`** SHALL be a **deterministic SHA-256** digest (**64-character lowerca
 
 - **WHEN** two **`owasp_scan`** invocations use identical `rulepack_version`, repository state, and parameters and the same physical finding is produced
 - **THEN** the finding **`id`** values are identical
+
+#### Scenario: Optional owasp_api omitted when unmapped
+
+- **WHEN** a finding is emitted by a rule that has no maintainer-defined API Security crosswalk
+- **THEN** the serialized finding does not include an **`owasp_api`** property
 
 ### Requirement: Narrow default for patch_candidate
 
@@ -203,14 +210,14 @@ When emitting findings mapped to **A03:2025**, the system MUST NOT claim **CVE i
 - **WHEN** the scan reports a git or tarball dependency source in a manifest
 - **THEN** the finding does not include a CVE identifier unless a future version explicitly enables advisory correlation
 
-### Requirement: Product version 1.0.5
+### Requirement: Product version 1.0.6
 
-The shipped package and scan metadata SHALL report **product version `1.0.5`** wherever **product version** is exposed (`pyproject.toml`, package `__version__`, and `scan.product_version` in JSON output).
+The shipped package and scan metadata SHALL report **product version `1.0.6`** wherever **product version** is exposed (`pyproject.toml`, package `__version__`, and `scan.product_version` in JSON output).
 
-#### Scenario: Scan metadata shows 1.0.5
+#### Scenario: Scan metadata shows 1.0.6
 
 - **WHEN** a scan completes successfully via any tool that includes scan metadata
-- **THEN** the JSON envelope includes `scan.product_version` with value **`1.0.5`**
+- **THEN** the JSON envelope includes `scan.product_version` with value **`1.0.6`**
 
 ### Requirement: MCP tool writes Markdown report to an explicit path
 
@@ -280,7 +287,7 @@ The **`owasp_scan_save`** tool SHALL NOT return the full findings envelope as it
 
 ### Requirement: Bundled OWASP cheat sheet map
 
-The system SHALL ship a **static**, read-only **cheat sheet map** bundled with the package (under `owasp_top10_mcp/`). The map SHALL resolve **zero or more** cheat sheet entries (`title`, `url`) for a given finding using **`rule_id`** first, then an optional **fallback** by **`owasp.id`** (A01-A10) when no rule-specific entry exists. Resolution MUST NOT use network I/O at scan time. URLs SHOULD target **OWASP Cheat Sheet Series** or other maintainer-approved OWASP documentation pages.
+The system SHALL ship a **static**, read-only **cheat sheet map** bundled with the package (under `owasp_top10_mcp/`). The map SHALL resolve **zero or more** cheat sheet entries (`title`, `url`) for a given finding using **`rule_id`** first; if none, an optional bundled fallback keyed by **`owasp_api.id`** when **`owasp_api`** is present; if still none, fall back by **`owasp.id`** (A01–A10). Resolution MUST NOT use network I/O at scan time. URLs SHOULD target **OWASP Cheat Sheet Series** or other maintainer-approved OWASP documentation pages.
 
 #### Scenario: Offline resolution
 
@@ -305,3 +312,49 @@ For each finding, when resolution per **Bundled OWASP cheat sheet map** yields a
 
 - **WHEN** a finding's `rule_id` has no entry but **`owasp.id`** has a configured fallback URL
 - **THEN** the Markdown includes **`#### Cheat sheet`** with that fallback link
+
+### Requirement: Cheat sheet resolution with API and technology supplements
+
+Curators SHALL extend **`RULE_CHEAT_SHEETS`** with **OWASP Cheat Sheet Series** URLs where **technology- or API-specific** sheets apply (e.g. **GraphQL** when a **`rule_id`** targets GraphQL). Normative precedence for **`#### Cheat sheet`** remains: **`rule_id`**, then **`owasp_api.id`** fallback when present, then **A01–A10** category fallback, per **Bundled OWASP cheat sheet map**.
+
+#### Scenario: Rule maps to GraphQL cheat sheet
+
+- **WHEN** a finding’s **`rule_id`** is listed in **`RULE_CHEAT_SHEETS`** with the **GraphQL** cheat sheet URL
+- **THEN** the Markdown **`#### Cheat sheet`** subsection includes that link (subject to existing deduplication rules)
+
+#### Scenario: owasp_api fallback applies when rule unmapped
+
+- **WHEN** a finding includes **`owasp_api`**, has **no** **`rule_id`** entry in **`RULE_CHEAT_SHEETS`**, and the bundled **`owasp_api.id`** fallback defines one or more cheat sheets for that **`id`**
+- **THEN** **`#### Cheat sheet`** includes those fallback links
+
+#### Scenario: Category fallback unchanged when no rule or API sheets
+
+- **WHEN** a finding has **no** **`rule_id`** cheat sheets and **no** applicable **`owasp_api.id`** fallback
+- **THEN** resolution uses **`owasp.id`** (**A01–A10**) category fallback only
+
+### Requirement: Bundled OWASP API Security 2023 URL map
+
+The system SHALL ship a **static** map from each **`API1`–`API10`** id to a canonical **2023** category documentation URL on `owasp.org`, plus a **hub** URL for the OWASP API Security project. URLs MUST be used only from bundled constants (no fetch at scan time).
+
+#### Scenario: Offline API reference merge
+
+- **WHEN** a finding includes **`owasp_api`**
+- **THEN** **`references`** includes the category URL and hub per the bundled map unless already present (normalized dedupe)
+
+### Requirement: Markdown OWASP API Security subsection
+
+When a finding includes **`owasp_api`** or **`references`** contains an OWASP API Security documentation URL, the Markdown report SHALL include **`#### OWASP API Security (2023)`** with distinct navigable links (category before hub when **`owasp_api`** is set).
+
+#### Scenario: Subsection present for API-mapped finding
+
+- **WHEN** a finding has **`owasp_api`** with **`id`** **`API8`**
+- **THEN** the Markdown for that finding includes **`#### OWASP API Security (2023)`** and a link under **`owasp.org/API-Security`**
+
+### Requirement: Primary category filter unchanged
+
+The **`categories`** parameter SHALL accept **only** **A01–A10** in v1 (not **`API*`** ids).
+
+#### Scenario: API id in filter is invalid
+
+- **WHEN** a client passes **`categories`** containing **`API1`**
+- **THEN** the server rejects the request with **`ValueError`** (same class as other invalid category strings)

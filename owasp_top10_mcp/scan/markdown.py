@@ -5,8 +5,12 @@ from urllib.parse import urlparse
 
 from owasp_top10_mcp.constants import (
     OWASP_2025_SLUGS,
+    OWASP_API_MARKDOWN_TITLES,
+    OWASP_API_SECURITY_HUB,
     cwe_url,
+    is_owasp_api_security_doc_url,
     normalize_doc_url,
+    owasp_api_category_url,
     owasp_top10_url,
 )
 from owasp_top10_mcp.scan.caps import SEVERITY_RANK
@@ -22,6 +26,13 @@ def _reference_link_label(url: str) -> str:
     for ax in sorted(OWASP_2025_SLUGS.keys()):
         if n == normalize_doc_url(owasp_top10_url(ax)):
             return f"OWASP Top 10:2025 - {ax}"
+    if is_owasp_api_security_doc_url(url):
+        u = url.strip().rstrip("/")
+        for aid, title in OWASP_API_MARKDOWN_TITLES.items():
+            if normalize_doc_url(owasp_api_category_url(aid)) == n:
+                return title
+        if normalize_doc_url(OWASP_API_SECURITY_HUB) == n:
+            return "OWASP API Security Project"
     parsed = urlparse(url.strip())
     host = parsed.netloc or ""
     path = (parsed.path or "").rstrip("/")
@@ -33,18 +44,60 @@ def _reference_link_label(url: str) -> str:
 
 
 def _supplementary_references(
-    references: list[str], category_url_norm: str
+    references: list[str], category_url_norm: str, exclude_norms: set[str] | None = None
 ) -> list[str]:
+    blocked = exclude_norms or set()
     seen_set: set[str] = set()
     out: list[str] = []
     for raw in references:
         n = normalize_doc_url(raw)
-        if not n or n == category_url_norm:
+        if not n or n == category_url_norm or n in blocked:
             continue
         if n in seen_set:
             continue
         seen_set.add(n)
         out.append(raw)
+    return out
+
+
+def _owasp_api_markdown_entries(f: dict) -> list[tuple[str, str]]:
+    """(title, raw_url) for #### OWASP API Security (2023), deduped by normalized URL."""
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    oa = f.get("owasp_api")
+    if isinstance(oa, dict):
+        aid = oa.get("id")
+        if isinstance(aid, str):
+            u = owasp_api_category_url(aid)
+            title = OWASP_API_MARKDOWN_TITLES.get(aid, aid)
+            nu = normalize_doc_url(u)
+            if nu and nu not in seen:
+                pairs.append((title, u))
+                seen.add(nu)
+            hub = OWASP_API_SECURITY_HUB
+            hn = normalize_doc_url(hub)
+            if hn and hn not in seen:
+                pairs.append(("OWASP API Security Project", hub))
+                seen.add(hn)
+            return pairs
+    for r in f.get("references") or []:
+        rs = str(r)
+        if not is_owasp_api_security_doc_url(rs):
+            continue
+        nu = normalize_doc_url(rs)
+        if not nu or nu in seen:
+            continue
+        seen.add(nu)
+        pairs.append((_reference_link_label(rs), rs))
+    return pairs
+
+
+def _api_doc_norms_for_further_reading_exclusion(f: dict) -> set[str]:
+    out: set[str] = set()
+    for r in f.get("references") or []:
+        rs = str(r)
+        if is_owasp_api_security_doc_url(rs):
+            out.add(normalize_doc_url(rs))
     return out
 
 
@@ -108,6 +161,13 @@ def render_markdown(envelope: dict[str, Any]) -> str:
         )
         lines.append(f"- **Category link:** [OWASP {oid}]({url})")
         cat_norm = normalize_doc_url(url)
+        api_entries = _owasp_api_markdown_entries(f)
+        if api_entries:
+            lines.append("")
+            lines.append("#### OWASP API Security (2023)")
+            lines.append("")
+            for title, u in api_entries:
+                lines.append(f"- [{title}]({u})")
         cwes = f.get("cwe") or []
         if cwes:
             lines.append("")
@@ -118,7 +178,8 @@ def render_markdown(envelope: dict[str, Any]) -> str:
                 lines.append(f"- [CWE-{int(cid)}]({cu})")
         refs = f.get("references") or []
         if isinstance(refs, list):
-            extra = _supplementary_references([str(x) for x in refs], cat_norm)
+            api_ex = _api_doc_norms_for_further_reading_exclusion(f)
+            extra = _supplementary_references([str(x) for x in refs], cat_norm, api_ex)
             if extra:
                 lines.append("")
                 lines.append("#### Further reading")
@@ -126,8 +187,16 @@ def render_markdown(envelope: dict[str, Any]) -> str:
                 for r in extra:
                     label = _reference_link_label(r)
                     lines.append(f"- [{label}]({r})")
+        oa_raw = f.get("owasp_api")
+        api_for_cheat = (
+            str(oa_raw["id"])
+            if isinstance(oa_raw, dict) and isinstance(oa_raw.get("id"), str)
+            else None
+        )
         cheat_links = resolve_cheat_sheets(
-            str(f.get("rule_id", "")), str(f.get("owasp", {}).get("id", ""))
+            str(f.get("rule_id", "")),
+            str(f.get("owasp", {}).get("id", "")),
+            api_for_cheat,
         )
         if cheat_links:
             lines.append("")

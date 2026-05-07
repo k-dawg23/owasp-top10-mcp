@@ -1,6 +1,6 @@
 # owasp-top10-mcp
 
-Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.5**, **rulepack 2025.1**.
+Local **MCP** server (stdio) for **static** repository scans mapped to **OWASP Top 10:2025**. **Product v1.0.6**, **rulepack 2025.1**. Findings use **A01–A10** as the primary taxonomy; many rules also include an optional **OWASP API Security Top 10:2023** crosswalk (`owasp_api`, doc links in `references`, and a **`#### OWASP API Security (2023)`** section in Markdown when present). See the [OWASP API Security project](https://owasp.org/www-project-api-security/).
 
 - **Repository:** [github.com/k-dawg23/owasp-top10-mcp](https://github.com/k-dawg23/owasp-top10-mcp)  
 - **License:** [MIT](LICENSE)
@@ -50,7 +50,7 @@ Run **`pip install -U owasp-top10-mcp`** (or `uv add 'owasp-top10-mcp==x.y.z'`) 
 
 ### Maintainers: bumping the product version
 
-1. Set **`__version__`** in `owasp_top10_mcp/__init__.py` to the new release (e.g. `1.0.5`).
+1. Set **`__version__`** in `owasp_top10_mcp/__init__.py` to the new release (e.g. `1.0.6`).
 2. Set **`version`** in `pyproject.toml` under `[project]` to the **same** string.
 3. Update the **lead sentence** of this README if it states the version explicitly.
 4. Add a bullet under **Release notes** (below).
@@ -78,7 +78,7 @@ After you **`git pull`** or change versions, **reload MCP** in your host or rest
 
 **`owasp_scan`** returns structured **JSON** (best for agents). **`owasp_scan_save`** runs the **same scan once** and writes that **exact JSON envelope** to disk (UTF-8, `indent=2`, `ensure_ascii=False`, trailing newline) — useful for CI artifacts, tickets, or archival without copy-pasting tool output. Prefer **`.json`** in `output_path` names client-side (e.g. `owasp-scan-<ISO8601>.json`); the server does not choose filenames.
 
-**Markdown reports** (**`owasp_report`**, **`owasp_report_save`**) include a per-finding **`#### Cheat sheet`** subsection when a **bundled, curated** map resolves to OWASP Cheat Sheet Series links (by **`rule_id`**, with a **category fallback** for A01–A10). Links are **offline** (no fetch at scan time) and may need **occasional maintainer review** if URLs move. **PyPI** publishing is not required to use this project from a clone.
+**Markdown reports** (**`owasp_report`**, **`owasp_report_save`**) include a per-finding **`#### Cheat sheet`** subsection when a **bundled, curated** map resolves to OWASP Cheat Sheet Series links (by **`rule_id`**, then optional **API1–API10** fallback when **`owasp_api`** is set, then **category** fallback for A01–A10). Technology-specific sheets (e.g. **GraphQL**) are included **when mapped** for a rule. Links are **offline** (no fetch at scan time) and may need **occasional maintainer review** if URLs move. **PyPI** publishing is not required to use this project from a clone.
 
 **`owasp_report`** takes the **same arguments** as **`owasp_scan`** and returns **Markdown** for reading or saving. Reports include **MITRE CWE** links (when rules emit `cwe` ids) and a **Further reading** list for supplementary `references` URLs (the primary OWASP category link stays on its own line; duplicate category URLs are not repeated there).
 
@@ -165,6 +165,7 @@ After editing **`mcp.json`**, reload MCP servers or restart Cursor.
 
 ## Release notes
 
+- **v1.0.6** - Optional **`owasp_api`** (**API1–API10**, 2023 edition) on selected findings; bundled links to [OWASP API Security Top 10 2023](https://owasp.org/www-project-api-security/); Markdown **`#### OWASP API Security (2023)`**; cheat sheet resolution extended (**rule** → **API fallback** → **A01–A10**), including **GraphQL** sheet for the GraphQL schema rule; **`.graphql`** files scanned at best-effort depth.
 - **v1.0.5** - **Astro** **`.astro`** files use **tier-1** scan depth (same JavaScript tier-1 rule pass as **`.vue`** / **`.svelte`** / HTML); README adds **Scan surface and depth**; OpenSpec change **`astro-tier1-scan`** (for archive workflow).
 - **v1.0.4** - Markdown reports add **curated OWASP Cheat Sheet Series** links (`#### Cheat sheet` per finding); bundled static map keyed by **`rule_id`** with A01–A10 fallback; no network I/O for link resolution.
 - **v1.0.3** - MCP tool **`owasp_scan_save`**: write the **JSON scan envelope** to an **absolute** `output_path` (optional **`overwrite`**); returns confirmation including **`finding_count`**, not the full payload.
@@ -183,7 +184,7 @@ The walker skips common vendor and build directories (e.g. **`node_modules`**, *
 
 - **Tier-1** (deeper, line-based rules for Python and typical web stacks): **`.py`**; **`.js`**, **`.jsx`**, **`.ts`**, **`.tsx`**, **`.mjs`**, **`.cjs`**; **`.vue`**, **`.svelte`**, **`.astro`**; **`.html`**, **`.htm`**. These files run the same **JavaScript/TypeScript tier-1** analyzer as other SFC-style extensions (Astro components are treated like Vue/Svelte for that pass—no Astro compiler; full-file text including frontmatter).
 - **Context / manifests:** e.g. **Dockerfile**, **docker-compose**, **`package.json`**, lockfiles, **`requirements.txt`**, selected **YAML** (incl. GitHub workflows, K8s dirs), **Terraform**—targeted or generic checks.
-- **Best-effort:** other configured extensions (e.g. **`.go`**, **`.java`**, many **`.json`** outside allowlisted names) get lighter generic rules only.
+- **Best-effort:** other configured extensions (e.g. **`.go`**, **`.java`**, **`.graphql`**, many **`.json`** outside allowlisted names) get lighter generic rules only.
 
 For the exact allowlists and blocked dirs, see **`owasp_top10_mcp/scan/walker.py`**. Caps (`max_files`, `time_budget_ms`, …) still apply; large repos may truncate per scan metadata.
 

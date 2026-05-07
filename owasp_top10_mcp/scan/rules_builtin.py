@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path, PurePosixPath
 
+from owasp_top10_mcp.constants import VALID_OWASP_API_IDS, owasp_top10_url
 from owasp_top10_mcp.scan.finding import RawFinding
 
 A03_LIMIT = ["no_cve_correlation_in_v1"]
@@ -22,6 +23,13 @@ def _rf(
     **kw: object,
 ) -> RawFinding:
     end_line = int(kw.get("end_line", line))
+    owasp_api_id = kw.get("owasp_api_id")
+    if owasp_api_id is not None:
+        oa = str(owasp_api_id)
+        if oa not in VALID_OWASP_API_IDS:
+            raise ValueError(f"Invalid owasp_api_id {oa!r}")
+    else:
+        oa = None
     return RawFinding(
         rule_id=rule_id,
         owasp_id=ow,
@@ -40,6 +48,7 @@ def _rf(
         patch_candidate=bool(kw.get("patch_candidate", False)),
         limitations=list(kw["limitations"]) if kw.get("limitations") else [],
         cwe=list(kw["cwe"]) if kw.get("cwe") else None,
+        owasp_api_id=oa,
     )
 
 
@@ -70,6 +79,7 @@ def analyze_dockerfile(rel_posix: str, lines: list[str]) -> list[RawFinding]:
                         fix_class="mechanical",
                         behavior_change=False,
                         limitations=A03_LIMIT,
+                        owasp_api_id="API8",
                     )
                 )
             elif img and ":" not in img:
@@ -87,6 +97,7 @@ def analyze_dockerfile(rel_posix: str, lines: list[str]) -> list[RawFinding]:
                         fix_class="local_logic",
                         behavior_change=True,
                         blast_radius="module",
+                        owasp_api_id="API8",
                     )
                 )
     if not has_user and lines:
@@ -104,6 +115,7 @@ def analyze_dockerfile(rel_posix: str, lines: list[str]) -> list[RawFinding]:
                 fix_class="local_logic",
                 behavior_change=True,
                 blast_radius="module",
+                owasp_api_id="API8",
             )
         )
     return out
@@ -125,6 +137,7 @@ def analyze_compose(rel_posix: str, text: str) -> list[RawFinding]:
                 fix_class="sensitive",
                 behavior_change=True,
                 blast_radius="repo",
+                owasp_api_id="API8",
             )
         ]
     return []
@@ -158,6 +171,7 @@ def analyze_package_json(rel_posix: str, text: str) -> list[RawFinding]:
                 behavior_change=True,
                 limitations=A03_LIMIT,
                 blast_radius="module",
+                owasp_api_id="API10",
             )
         )
     return out
@@ -188,6 +202,7 @@ def analyze_requirements(rel_posix: str, lines: list[str]) -> list[RawFinding]:
                     fix_class="mechanical",
                     behavior_change=False,
                     limitations=A03_LIMIT,
+                    owasp_api_id="API10",
                 )
             )
     return out
@@ -212,6 +227,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                 fix_class="sensitive",
                 behavior_change=True,
                 cwe=[502],
+                owasp_api_id="API8",
             )
         )
     for i, line in enumerate(lines, start=1):
@@ -230,6 +246,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                     fix_class="local_logic",
                     behavior_change=True,
                     cwe=[502],
+                    owasp_api_id="API8",
                 )
             )
         if re.search(r"exec\s*\(|eval\s*\(", line):
@@ -247,6 +264,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                     fix_class="sensitive",
                     behavior_change=True,
                     cwe=[94],
+                    owasp_api_id="API8",
                 )
             )
         if re.search(r"(\.execute\s*\(\s*f[\"']|\.execute\s*\(\s*[\"'][^\"']*\{)", line):
@@ -264,6 +282,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                     fix_class="local_logic",
                     behavior_change=True,
                     cwe=[89],
+                    owasp_api_id="API8",
                 )
             )
         if re.search(r"hashlib\.(md5|sha1)\s*\(", line) and "usedforsecurity=False" not in line:
@@ -281,6 +300,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                     fix_class="local_logic",
                     behavior_change=True,
                     cwe=[328],
+                    owasp_api_id="API8",
                 )
             )
         if re.match(r"^\s*except\s*:\s*$", line) or re.match(
@@ -299,6 +319,7 @@ def analyze_lines_python_tier1(rel_posix: str, lines: list[str]) -> list[RawFind
                     line.strip()[:300],
                     fix_class="local_logic",
                     behavior_change=True,
+                    owasp_api_id="API8",
                 )
             )
     return out
@@ -322,6 +343,7 @@ def analyze_lines_js_tier1(rel_posix: str, lines: list[str]) -> list[RawFinding]
                     fix_class="local_logic",
                     behavior_change=True,
                     cwe=[79],
+                    owasp_api_id="API8",
                 )
             )
         if "dangerouslySetInnerHTML" in line:
@@ -339,6 +361,7 @@ def analyze_lines_js_tier1(rel_posix: str, lines: list[str]) -> list[RawFinding]
                     fix_class="local_logic",
                     behavior_change=True,
                     cwe=[79],
+                    owasp_api_id="API8",
                 )
             )
         if re.search(r"\beval\s*\(", line):
@@ -356,6 +379,7 @@ def analyze_lines_js_tier1(rel_posix: str, lines: list[str]) -> list[RawFinding]
                     fix_class="sensitive",
                     behavior_change=True,
                     cwe=[94],
+                    owasp_api_id="API8",
                 )
             )
         if re.search(r"createHash\s*\(\s*['\"]md5['\"]", line) or re.search(
@@ -374,6 +398,7 @@ def analyze_lines_js_tier1(rel_posix: str, lines: list[str]) -> list[RawFinding]
                     line.strip()[:300],
                     fix_class="local_logic",
                     behavior_change=True,
+                    owasp_api_id="API8",
                 )
             )
         low = line.lower()
@@ -423,6 +448,7 @@ def analyze_generic(rel_posix: str, lines: list[str]) -> list[RawFinding]:
                     fix_class="sensitive",
                     behavior_change=True,
                     blast_radius="module",
+                    owasp_api_id="API2",
                 )
             )
             break
@@ -451,6 +477,32 @@ def check_package_lock_present(root: Path, rel_posix: str) -> list[RawFinding]:
             behavior_change=False,
             limitations=A03_LIMIT,
             blast_radius="module",
+            owasp_api_id="API10",
+        )
+    ]
+
+
+def analyze_graphql_schema(rel_posix: str, text: str) -> list[RawFinding]:
+    tl = text.lower()
+    if "type query" not in tl and "type mutation" not in tl:
+        return []
+    line_no = next((i for i, ln in enumerate(text.splitlines(), start=1) if ln.strip()), 1)
+    return [
+        _rf(
+            "owasp2025.a08.graphql.schema-review",
+            "A02",
+            "GraphQL schema: review auth, introspection, and query limits",
+            "GraphQL APIs need resolver-level authorization, careful introspection exposure in production, and defenses against abusive queries.",
+            "medium",
+            "review_required",
+            rel_posix,
+            line_no,
+            "(GraphQL schema file)",
+            references=[owasp_top10_url("A02")],
+            fix_class="unknown",
+            behavior_change=False,
+            blast_radius="module",
+            owasp_api_id="API8",
         )
     ]
 
@@ -492,5 +544,8 @@ def run_rules_on_file(root: Path, rel_posix: str, tier: str, text: str) -> list[
 
     if tier == "context" and suf in (".yml", ".yaml", ".tf"):
         out.extend(analyze_generic(rel_posix, lines))
+
+    if suf == ".graphql":
+        out.extend(analyze_graphql_schema(rel_posix, text))
 
     return out

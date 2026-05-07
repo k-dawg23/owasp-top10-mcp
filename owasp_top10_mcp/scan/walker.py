@@ -56,6 +56,7 @@ BEST_EXT = frozenset(
         ".rs",
         ".php",
         ".cs",
+        ".graphql",
     }
 )
 SPECIAL_NAMES = frozenset(

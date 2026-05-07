@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from owasp_top10_mcp.report_save import save_markdown_report, save_scan_json
+from owasp_top10_mcp.scan.cheat_sheets import resolve_cheat_sheets
 from owasp_top10_mcp.scan.engine import run_scan
 from owasp_top10_mcp.scan.markdown import render_markdown
 from owasp_top10_mcp.server import owasp_report_save, owasp_scan, owasp_scan_save
@@ -32,7 +33,7 @@ def test_run_scan_basic():
     r = run_scan(str(FIXTURE), profile="human_full")
     assert r["schema_version"] == "1.0"
     assert r["scan"]["rulepack_version"] == "2025.1"
-    assert r["scan"]["product_version"] == "1.0.5"
+    assert r["scan"]["product_version"] == "1.0.6"
     ids = {f["owasp"]["id"] for f in r["findings"]}
     assert "A05" in ids or "A08" in ids or "A02" in ids
 
@@ -92,6 +93,48 @@ def test_invalid_category():
         run_scan(str(FIXTURE), categories=["A99"])
 
 
+def test_invalid_category_api1_rejected():
+    with pytest.raises(ValueError, match="Invalid OWASP"):
+        run_scan(str(FIXTURE), categories=["API1"], profile="human_full")
+
+
+def test_graphql_schema_finding_has_owasp_api():
+    r = run_scan(str(FIXTURE), profile="human_full")
+    g = [
+        f
+        for f in r["findings"]
+        if f.get("rule_id") == "owasp2025.a08.graphql.schema-review"
+    ]
+    assert g, "expected GraphQL schema finding in sample_repo"
+    assert g[0].get("owasp_api") == {"year": 2023, "id": "API8"}
+    assert any("API-Security" in str(ref) for ref in (g[0].get("references") or []))
+
+
+def test_markdown_includes_api_security_subsection_when_owasp_api():
+    r = run_scan(str(FIXTURE), profile="human_full")
+    md = render_markdown(r)
+    if any(f.get("owasp_api") for f in r["findings"]):
+        assert "#### OWASP API Security (2023)" in md
+        assert "owasp.org/API-Security" in md
+
+
+def test_resolve_cheat_sheets_graphql_rule():
+    links = resolve_cheat_sheets(
+        "owasp2025.a08.graphql.schema-review",
+        "A02",
+        "API8",
+    )
+    assert any("GraphQL_Cheat_Sheet" in x["url"] for x in links)
+
+
+def test_resolve_cheat_sheets_api_fallback_before_category():
+    links = resolve_cheat_sheets("custom.unmapped.rule", "A05", "API7")
+    assert any(
+        "Server_Side_Request_Forgery" in x["url"] or "SSRF" in x["title"] for x in links
+    )
+    assert not any("Injection_Prevention" in x["url"] for x in links)
+
+
 def test_markdown_cwe_mitre_link():
     r = run_scan(str(FIXTURE), profile="human_full")
     md = render_markdown(r)
@@ -109,7 +152,7 @@ def test_normalize_doc_url_category_slash():
 def _minimal_scan() -> dict:
     return {
         "rulepack_version": "2025.1",
-        "product_version": "1.0.5",
+        "product_version": "1.0.6",
         "profile": "human_full",
         "run_id": "r1",
         "time_ms": 1,
@@ -217,7 +260,7 @@ def test_save_markdown_report_result_keys(tmp_path):
     assert result["bytes_written"] == len(render_markdown(r).encode("utf-8"))
     assert result["truncated"] == r["scan"]["truncated"]
     assert result["rulepack_version"] == "2025.1"
-    assert result["product_version"] == "1.0.5"
+    assert result["product_version"] == "1.0.6"
 
 
 def test_owasp_report_save_mcp_tool(tmp_path):
@@ -227,7 +270,7 @@ def test_owasp_report_save_mcp_tool(tmp_path):
         output_path=str(out),
         profile="human_full",
     )
-    assert result["product_version"] == "1.0.5"
+    assert result["product_version"] == "1.0.6"
     assert result["bytes_written"] > 0
     assert result["path"] == str(out.resolve())
     assert "truncated" in result
@@ -265,7 +308,7 @@ def test_save_scan_json_overwrite_replaces(tmp_path):
     save_scan_json(r, str(out), overwrite=True)
     parsed = json.loads(out.read_text(encoding="utf-8"))
     assert parsed == r
-    assert parsed["scan"]["product_version"] == "1.0.5"
+    assert parsed["scan"]["product_version"] == "1.0.6"
 
 
 def test_save_scan_json_result_keys(tmp_path):
@@ -280,7 +323,7 @@ def test_save_scan_json_result_keys(tmp_path):
     assert result["finding_count"] == len(r["findings"])
     assert result["truncated"] == r["scan"]["truncated"]
     assert result["rulepack_version"] == "2025.1"
-    assert result["product_version"] == "1.0.5"
+    assert result["product_version"] == "1.0.6"
     for key in (
         "path",
         "bytes_written",
@@ -299,7 +342,7 @@ def test_owasp_scan_save_mcp_tool(tmp_path):
         output_path=str(out),
         profile="human_full",
     )
-    assert result["product_version"] == "1.0.5"
+    assert result["product_version"] == "1.0.6"
     assert result["bytes_written"] > 0
     assert result["path"] == str(out.resolve())
     assert "truncated" in result
@@ -309,7 +352,7 @@ def test_owasp_scan_save_mcp_tool(tmp_path):
 
 def test_owasp_scan_mcp_returns_product_version():
     r = owasp_scan(repo_root=str(FIXTURE), profile="human_full")
-    assert r["scan"]["product_version"] == "1.0.5"
+    assert r["scan"]["product_version"] == "1.0.6"
 
 
 def test_markdown_includes_cheat_sheet_for_mapped_rule():

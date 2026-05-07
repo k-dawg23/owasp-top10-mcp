@@ -157,6 +157,7 @@ def run_scan(
                 fix_class="unknown",
                 behavior_change=False,
                 blast_radius="repo",
+                owasp_api_id="API1",
             )
         )
 

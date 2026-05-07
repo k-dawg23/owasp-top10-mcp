@@ -1,7 +1,8 @@
 """Bundled OWASP Cheat Sheet Series links (curator-maintained, offline).
 
 Maps ``rule_id`` (from ``rules_builtin``) to one or more ``{title, url}`` entries.
-When a rule has no entry, :func:`resolve_cheat_sheets` falls back to a single
+When a rule has no entry, :func:`resolve_cheat_sheets` tries an optional
+**OWASP API** id fallback (``OWASP_API_CHEAT_FALLBACK``), then a single
 category-level sheet per ``owasp.id`` (A01–A10).
 
 URLs are taken from https://cheatsheetseries.owasp.org/ (and sibling OWASP docs).
@@ -143,6 +144,12 @@ RULE_CHEAT_SHEETS: dict[str, list[CheatSheetLink]] = {
             "Error_Handling_Cheat_Sheet.html",
         )
     ],
+    "owasp2025.a08.graphql.schema-review": [
+        _link(
+            "OWASP Cheat Sheet - GraphQL",
+            "GraphQL_Cheat_Sheet.html",
+        )
+    ],
 }
 
 # When ``rule_id`` is not in ``RULE_CHEAT_SHEETS``, use these per OWASP 2025 id.
@@ -210,6 +217,16 @@ CATEGORY_FALLBACK: dict[str, list[CheatSheetLink]] = {
 }
 
 
+OWASP_API_CHEAT_FALLBACK: dict[str, list[CheatSheetLink]] = {
+    "API7": [
+        _link(
+            "OWASP Cheat Sheet - SSRF Prevention",
+            "Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html",
+        )
+    ],
+}
+
+
 def _dedupe_preserve_order(links: list[CheatSheetLink]) -> list[CheatSheetLink]:
     seen: set[str] = set()
     out: list[CheatSheetLink] = []
@@ -222,13 +239,17 @@ def _dedupe_preserve_order(links: list[CheatSheetLink]) -> list[CheatSheetLink]:
     return out
 
 
-def resolve_cheat_sheets(rule_id: str, owasp_id: str) -> list[CheatSheetLink]:
-    """Return cheat sheet links for a finding (rule-specific first, else category).
-
-    Deduplicates by normalized URL. Category fallback is used only when there is
-    no rule-specific entry in :data:`RULE_CHEAT_SHEETS`.
-    """
+def resolve_cheat_sheets(
+    rule_id: str,
+    owasp_id: str,
+    owasp_api_id: str | None = None,
+) -> list[CheatSheetLink]:
+    """Return cheat sheet links (rule-specific, else API fallback, else A01–A10 category)."""
     specific = RULE_CHEAT_SHEETS.get(rule_id)
     if specific:
         return _dedupe_preserve_order(list(specific))
+    if owasp_api_id:
+        fb = OWASP_API_CHEAT_FALLBACK.get(owasp_api_id)
+        if fb:
+            return _dedupe_preserve_order(list(fb))
     return _dedupe_preserve_order(list(CATEGORY_FALLBACK.get(owasp_id, [])))
